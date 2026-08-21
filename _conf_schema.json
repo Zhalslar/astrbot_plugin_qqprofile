@@ -4,5 +4,11 @@
         "type": "bool",
         "hint": "",
         "default": false
+    },
+    "llm_tools": {
+        "description": "注册LLM工具，支持通过自然语言(工具调用)修改QQ资料；关闭后仅保留指令方式",
+        "type": "bool",
+        "hint": "",
+        "default": true
     }
 }

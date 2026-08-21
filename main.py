@@ -11,7 +11,11 @@ from astrbot.core.star.filter.permission import PermissionType
 from astrbot.core.star.star_tools import StarTools
 
 from .status import status_mapping
+from .tools import build_qq_profile_tools, build_qq_profile_toolset
 from .utils import download_image, get_nickname
+
+# 「资料」自然语言指令的触发词，用于剥离指令前缀
+PROFILE_CMDS = ("资料管理", "QQ资料", "管理资料", "资料")
 
 
 class QQProfilePlugin(Star):
@@ -21,6 +25,40 @@ class QQProfilePlugin(Star):
         self.curr_nickname = None
         self.avatar_dir = StarTools.get_data_dir("astrbot_plugin_qqprofile") / "avatar"
         self.avatar_dir.mkdir(parents=True, exist_ok=True)
+        if self.conf.get("llm_tools", True):
+            self._register_llm_tools()
+
+    def _register_llm_tools(self) -> None:
+        """将 QQ 资料管理能力注册为 LLM 工具，支持自然语言调用。
+
+        参考：https://docs.astrbot.app/dev/star/guides/ai.html#%E6%B3%A8%E5%86%8C-tool-%E5%88%B0-astrbot
+        """
+        tools = build_qq_profile_tools(
+            sync_name=bool(self.conf.get("sync_name", False)),
+            avatar_dir=str(self.avatar_dir),
+        )
+        try:
+            # >= v4.5.1 推荐用法
+            self.context.add_llm_tools(*tools)
+        except AttributeError:
+            # < v4.5.1 旧版兼容
+            tool_mgr = self.context.provider_manager.llm_tools
+            for tool in tools:
+                tool_mgr.func_list.append(tool)
+        logger.info(f"QQProfile: 已注册 {len(tools)} 个 LLM 工具（自然语言管理QQ资料）")
+
+    @staticmethod
+    def _strip_profile_command(text: str) -> str:
+        """剥离「资料」等指令前缀，返回剩余的自然语言描述。"""
+        text = text.strip()
+        for cmd in PROFILE_CMDS:
+            if text == cmd:
+                return ""
+            if text.startswith(cmd) and (
+                len(text) == len(cmd) or text[len(cmd)] in (" ", "\u3000", "\n", "\t")
+            ):
+                return text[len(cmd) :].strip()
+        return text
 
     async def get_curr_persona_id(self, event: AstrMessageEvent) -> str | None:
         """获取当前会话的人格ID"""
@@ -186,3 +224,71 @@ class QQProfilePlugin(Star):
             msg += f"\n\n【{persona['name']}】:\n{persona['prompt']}"
         yield event.plain_result(msg.strip())
         return
+
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.command("资料", alias={"QQ资料", "资料管理", "管理资料"})
+    async def manage_profile(self, event: AiocqhttpMessageEvent):
+        """用自然语言管理QQ资料。
+
+        例如：
+        - 「资料 把昵称改成 小可爱」
+        - 「资料 签名换成 摸鱼中」
+        - 「资料 在线状态变成 我的电量」
+        - 「资料 看看我现在叫什么」
+        - 「资料 切换人格到 猫娘」（附带图片时还可：『资料 把头像换成这张图』）
+
+        实现方式：调用 AstrBot 的 tool_loop_agent，让 LLM 自主选择
+        tools.py 中注册的 QQ 资料工具执行（参考官方 AI 开发文档）。
+        """
+        prompt = self._strip_profile_command(event.get_message_str())
+        if not prompt:
+            yield event.plain_result(
+                "可以这样对我说：\n"
+                "「资料 把昵称改成 小可爱」\n"
+                "「资料 签名换成 摸鱼中」\n"
+                "「资料 在线状态设为 我的电量」\n"
+                "「资料 头像换成这张图」（随消息发送一张图片）\n"
+                "「资料 切换人格到 猫娘」\n"
+                "「资料 我现在的昵称是什么？」"
+            )
+            return
+
+        try:
+            prov_id = await self.context.get_current_chat_provider_id(
+                event.unified_msg_origin
+            )
+        except Exception as e:
+            yield event.plain_result(f"获取当前AI模型失败：{e}")
+            return
+
+        toolset = build_qq_profile_toolset(
+            sync_name=bool(self.conf.get("sync_name", False)),
+            avatar_dir=str(self.avatar_dir),
+        )
+        system_prompt = (
+            "你是「QQ资料管理助手」。根据用户的自然语言请求，选择最合适的工具"
+            "查询或修改机器人的QQ资料（头像、昵称、个性签名、在线状态、人格）。\n"
+            "要求：\n"
+            "1. 切换人格前先用 qq_list_personas 确认人格名称；\n"
+            "2. 工具调用失败时如实转述错误信息，并给出补救建议；\n"
+            "3. 操作类工具仅管理员可用，工具返回权限不足时请礼貌告知用户；\n"
+            "4. 全程使用简体中文，回答简洁、口语化。"
+        )
+        try:
+            llm_resp = await self.context.tool_loop_agent(
+                event=event,
+                chat_provider_id=prov_id,
+                prompt=prompt,
+                tools=toolset,
+                system_prompt=system_prompt,
+                max_steps=8,
+                tool_call_timeout=60,
+            )
+            text = (llm_resp.completion_text or "").strip()
+            yield event.plain_result(text or "已处理完成。")
+        except Exception as e:
+            logger.error(f"自然语言管理资料失败：{e}")
+            yield event.plain_result(
+                f"执行失败：{e}\n"
+                "建议检查：当前会话使用的模型是否支持函数调用(工具调用)。"
+            )
