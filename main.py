@@ -168,10 +168,16 @@ class QQProfilePlugin(Star):
                 logger.debug(f"已同步bot的头像为：{str(avatar_path)}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
-    @filter.command("人格切换") # 与另一个插件命令冲突，故换成“人格切换”
+    @filter.llm_tool(name="qqprofile_switch_persona")
+    @filter.command("切换人格")
     async def change_persona(
         self, event: AiocqhttpMessageEvent, persona_id: str | None = None
     ):
+        """Switch the current conversation to a persona.
+
+        Args:
+            persona_id(string): The name of the persona to switch to.
+        """
         if not event.is_admin():
             yield event.plain_result("仅管理员可以切换人格")
             return
@@ -208,15 +214,10 @@ class QQProfilePlugin(Star):
         event.stop_event()
 
     @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_list_personas")
     @filter.command("人格列表", alias={"查看人格列表"})
-    async def list_persona(
-        self, event: AiocqhttpMessageEvent, persona_id: str | None = None
-    ):
-        """List available personas and their prompts.
-
-        Args:
-            persona_id(string): Unused compatibility argument.
-        """
+    async def list_persona(self, event: AiocqhttpMessageEvent):
+        """List available personas and their prompts."""
         if not event.is_admin():
             yield event.plain_result("仅管理员可以查看人格列表")
             return
