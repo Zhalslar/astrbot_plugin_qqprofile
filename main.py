@@ -107,10 +107,18 @@ class QQProfilePlugin(Star):
     async def set_status(
         self, event: AiocqhttpMessageEvent, status_name: str | None = None
     ):
-        """Set the bot's online status.
+        """Set the bot's QQ online status.
+
+        Pass one exact supported name: 在线, Q我吧, 离开, 忙碌, 请勿打扰, 隐身,
+        听歌中, 春日限定, 一起元梦, 求星搭子, 被掏空, 今日天气, 我crush了, 爱你,
+        恋爱中, 好运锦鲤, 水逆退散, 嗨到飞起, 元气满满, 宝宝认证, 一言难尽, 难得糊涂,
+        emo中, 我太难了, 我想开了, 我没事, 想静静, 悠哉哉, 去旅行, 信号弱, 出去浪,
+        肝作业, 学习中, 搬砖中, 摸鱼中, 无聊中, timi中, 睡觉中, 熬夜中, 追剧中,
+        有亿点冷, 一月你好, 我的电量. Map natural expressions to the closest exact
+        value, for example, "busy" to 忙碌.
 
         Args:
-            status_name(string): The desired status from the supported QQ statuses.
+            status_name(string): An exact supported status name from the list above.
         """
         if not event.is_admin():
             yield event.plain_result("仅管理员可以修改机器人状态")
