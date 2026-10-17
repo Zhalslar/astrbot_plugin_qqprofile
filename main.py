@@ -48,9 +48,13 @@ class QQProfilePlugin(Star):
                 return persona_id
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_avatar")
     @filter.command("设置头像")
     async def set_avatar(self, event: AiocqhttpMessageEvent):
-        "将引用的图片设置为头像"
+        """Set the bot's avatar to an image attached to or quoted in the message."""
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人头像")
+            return
         chain = event.get_messages()
         img_url = None
         for seg in chain:
@@ -78,11 +82,19 @@ class QQProfilePlugin(Star):
                 logger.error(f"保存头像失败：{e}")
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_signature")
     @filter.command("设置签名")
     async def set_longnick(
         self, event: AiocqhttpMessageEvent, longnick: str | None = None
     ):
-        """设置Bot的签名，并同步空间（可在QQ里关掉）"""
+        """Set the bot's QQ signature.
+
+        Args:
+            longnick(string): The new signature text.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人签名")
+            return
         if not longnick:
             yield event.plain_result("没提供新签名呢")
             return
@@ -90,11 +102,27 @@ class QQProfilePlugin(Star):
         yield event.plain_result(f"我签名已更新：{longnick}")
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_status")
     @filter.command("设置状态")
     async def set_status(
         self, event: AiocqhttpMessageEvent, status_name: str | None = None
     ):
-        """设置Bot的在线状态"""
+        """Set the bot's QQ online status.
+
+        Pass one exact supported name: 在线, Q我吧, 离开, 忙碌, 请勿打扰, 隐身,
+        听歌中, 春日限定, 一起元梦, 求星搭子, 被掏空, 今日天气, 我crush了, 爱你,
+        恋爱中, 好运锦鲤, 水逆退散, 嗨到飞起, 元气满满, 宝宝认证, 一言难尽, 难得糊涂,
+        emo中, 我太难了, 我想开了, 我没事, 想静静, 悠哉哉, 去旅行, 信号弱, 出去浪,
+        肝作业, 学习中, 搬砖中, 摸鱼中, 无聊中, timi中, 睡觉中, 熬夜中, 追剧中,
+        有亿点冷, 一月你好, 我的电量. Map natural expressions to the closest exact
+        value, for example, "busy" to 忙碌.
+
+        Args:
+            status_name(string): An exact supported status name from the list above.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人状态")
+            return
         if not status_name:
             yield event.plain_result("没提供新状态呢")
             return
@@ -108,11 +136,19 @@ class QQProfilePlugin(Star):
         yield event.plain_result(f"我状态已更新为【{status_name}】")
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_nickname")
     @filter.command("设置昵称")
     async def set_nickname(
         self, event: AiocqhttpMessageEvent, nickname: str | None = None
     ):
-        """设置Bot的昵称"""
+        """Set the bot's QQ nickname.
+
+        Args:
+            nickname(string): The new nickname; defaults to the current persona name.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人昵称")
+            return
         nickname = nickname or await self.get_curr_persona_id(event)
         if not nickname:
             yield event.plain_result("未输入新昵称")
@@ -140,10 +176,20 @@ class QQProfilePlugin(Star):
                 logger.debug(f"已同步bot的头像为：{str(avatar_path)}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_switch_persona")
     @filter.command("切换人格")
     async def change_persona(
         self, event: AiocqhttpMessageEvent, persona_id: str | None = None
     ):
+        """Switch the current conversation to a persona.
+
+        Args:
+            persona_id(string): The name of the persona to switch to.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以切换人格")
+            return
+
         # 确定目标人格ID
         if persona_id:
             target_persona = next(
@@ -176,11 +222,13 @@ class QQProfilePlugin(Star):
         event.stop_event()
 
     @filter.permission_type(filter.PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_list_personas")
     @filter.command("人格列表", alias={"查看人格列表"})
-    async def list_persona(
-        self, event: AiocqhttpMessageEvent, persona_id: str | None = None
-    ):
-        """查看人格列表"""
+    async def list_persona(self, event: AiocqhttpMessageEvent):
+        """List available personas and their prompts."""
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以查看人格列表")
+            return
         msg = ""
         for persona in self.context.provider_manager.personas:
             msg += f"\n\n【{persona['name']}】:\n{persona['prompt']}"
