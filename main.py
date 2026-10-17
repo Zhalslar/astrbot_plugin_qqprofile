@@ -48,9 +48,13 @@ class QQProfilePlugin(Star):
                 return persona_id
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_avatar")
     @filter.command("设置头像")
     async def set_avatar(self, event: AiocqhttpMessageEvent):
-        "将引用的图片设置为头像"
+        """Set the bot's avatar to an image attached to or quoted in the message."""
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人头像")
+            return
         chain = event.get_messages()
         img_url = None
         for seg in chain:
@@ -78,11 +82,19 @@ class QQProfilePlugin(Star):
                 logger.error(f"保存头像失败：{e}")
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_signature")
     @filter.command("设置签名")
     async def set_longnick(
         self, event: AiocqhttpMessageEvent, longnick: str | None = None
     ):
-        """设置Bot的签名，并同步空间（可在QQ里关掉）"""
+        """Set the bot's QQ signature.
+
+        Args:
+            longnick(string): The new signature text.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人签名")
+            return
         if not longnick:
             yield event.plain_result("没提供新签名呢")
             return
@@ -90,11 +102,19 @@ class QQProfilePlugin(Star):
         yield event.plain_result(f"我签名已更新：{longnick}")
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_status")
     @filter.command("设置状态")
     async def set_status(
         self, event: AiocqhttpMessageEvent, status_name: str | None = None
     ):
-        """设置Bot的在线状态"""
+        """Set the bot's online status.
+
+        Args:
+            status_name(string): The desired status from the supported QQ statuses.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人状态")
+            return
         if not status_name:
             yield event.plain_result("没提供新状态呢")
             return
@@ -108,11 +128,19 @@ class QQProfilePlugin(Star):
         yield event.plain_result(f"我状态已更新为【{status_name}】")
 
     @filter.permission_type(PermissionType.ADMIN)
+    @filter.llm_tool(name="qqprofile_set_nickname")
     @filter.command("设置昵称")
     async def set_nickname(
         self, event: AiocqhttpMessageEvent, nickname: str | None = None
     ):
-        """设置Bot的昵称"""
+        """Set the bot's QQ nickname.
+
+        Args:
+            nickname(string): The new nickname; defaults to the current persona name.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以修改机器人昵称")
+            return
         nickname = nickname or await self.get_curr_persona_id(event)
         if not nickname:
             yield event.plain_result("未输入新昵称")
@@ -140,10 +168,14 @@ class QQProfilePlugin(Star):
                 logger.debug(f"已同步bot的头像为：{str(avatar_path)}")
 
     @filter.permission_type(filter.PermissionType.ADMIN)
-    @filter.command("切换人格")
+    @filter.command("人格切换") # 与另一个插件命令冲突，故换成“人格切换”
     async def change_persona(
         self, event: AiocqhttpMessageEvent, persona_id: str | None = None
     ):
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以切换人格")
+            return
+
         # 确定目标人格ID
         if persona_id:
             target_persona = next(
@@ -180,7 +212,14 @@ class QQProfilePlugin(Star):
     async def list_persona(
         self, event: AiocqhttpMessageEvent, persona_id: str | None = None
     ):
-        """查看人格列表"""
+        """List available personas and their prompts.
+
+        Args:
+            persona_id(string): Unused compatibility argument.
+        """
+        if not event.is_admin():
+            yield event.plain_result("仅管理员可以查看人格列表")
+            return
         msg = ""
         for persona in self.context.provider_manager.personas:
             msg += f"\n\n【{persona['name']}】:\n{persona['prompt']}"
