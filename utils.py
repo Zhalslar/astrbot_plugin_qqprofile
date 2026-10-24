@@ -1,9 +1,14 @@
+import asyncio
+import shutil
+from pathlib import Path
+from urllib.parse import unquote
 
-import os
 import aiofiles
 import aiohttp
-from astrbot import logger
-from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import AiocqhttpMessageEvent
+
+from astrbot.core.platform.sources.aiocqhttp.aiocqhttp_message_event import (
+    AiocqhttpMessageEvent,
+)
 
 
 async def get_nickname(event: AiocqhttpMessageEvent) -> str | None:
@@ -12,7 +17,20 @@ async def get_nickname(event: AiocqhttpMessageEvent) -> str | None:
 
 
 async def download_image(url: str, save_path: str) -> None:
-    """下载图片并保存到本地"""
+    """Download or copy an image to a local path.
+
+    Args:
+        url: Image URL or local file path.
+        save_path: Destination file path.
+
+    Raises:
+        Exception: If a remote image cannot be downloaded.
+    """
+    source_path = Path(unquote(url))
+    if source_path.is_file():
+        await asyncio.to_thread(shutil.copyfile, source_path, save_path)
+        return
+
     url = url.replace("https://", "http://")
     async with aiohttp.ClientSession() as session:
         async with session.get(url) as resp:
